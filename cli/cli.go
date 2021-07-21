@@ -6,6 +6,7 @@ import (
 	explorer "learngo/github.com/nomadcoders/explorer/templates"
 	"learngo/github.com/nomadcoders/rest"
 	"os"
+	"runtime"
 )
 
 func usage() {
@@ -13,12 +14,11 @@ func usage() {
 	fmt.Printf("Please use the following commands:\n\n")
 	fmt.Printf("-port:   	 Set port of the server\n")
 	fmt.Printf("-mode:       Choose among 'html' and 'rest' and 'both'\n")
-	os.Exit(1)
+	runtime.Goexit()
 
 }
 
 func Start() {
-	fmt.Println(os.Args)
 	if len(os.Args) == 1 {
 		usage()
 	}
