@@ -2,7 +2,9 @@ package utils
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
+	"fmt"
 	"log"
 )
 
@@ -24,4 +26,10 @@ func FromBytes(i interface{}, data []byte) { // 인자는 포인터와 복원할
 	HandleErr(decoder.Decode(i))
 	// 포인터로 접근해서 값 자체를 변경해주었기 때문에
 	// 이렇게 간단하게 코드가 마무리 되었다
+}
+
+func Hash(i interface{}) string {
+	s := fmt.Sprintf("%v", i)
+	hash := sha256.Sum256([]byte(s))
+	return fmt.Sprintf("%x", hash)
 }
