@@ -29,8 +29,8 @@ func (b *blockchain) persist() {
 	db.SaveCheckpoint(utils.ToBytes(b))
 	// 블록체인 구조체를 바이트로 변환한 슬라이스 []byte를 인수로 넘겨준다
 }
-func (b *blockchain) AddBlock(data string) {
-	block := createBlock(data, b.NewstHash, b.Height+1)
+func (b *blockchain) AddBlock() {
+	block := createBlock(b.NewstHash, b.Height+1)
 	b.NewstHash = block.Hash
 	b.Height = block.Height
 	b.CurrentDifficulty = block.Difficulty
@@ -78,6 +78,37 @@ func (b *blockchain) difficulty() int {
 		return b.CurrentDifficulty
 	}
 }
+
+func (b *blockchain) txOuts() []*TxOut {
+	var txOuts []*TxOut
+	blocks := b.BlocksSlice()
+	for _, block := range blocks {
+		for _, tx := range block.Transactions {
+			txOuts = append(txOuts, tx.TxOuts...) // 블록 안에 []*Tx가 있고 Tx 안에 []*TxOut 슬라이스가 있기 때문에 tx.TxOuts... 이 들어가는 것이다
+		}
+	}
+	return txOuts
+}
+func (b *blockchain) TxOutsByAddress(address string) []*TxOut { // 함수를 public으로 export 되게 해놓은 이유는 이 함수를 API에서 불러올 것이기 때문이다
+	var OwnedTxOuts []*TxOut
+	txOuts := b.txOuts()
+	for _, txOut := range txOuts {
+		if txOut.Owner == address {
+			OwnedTxOuts = append(OwnedTxOuts, txOut)
+		}
+	}
+	return OwnedTxOuts
+}
+
+func (b *blockchain) TotalBalanceByAddress(address string) int {
+	txOuts := b.TxOutsByAddress(address)
+	var amount int
+	for _, txOut := range txOuts {
+		amount += txOut.Amount
+	}
+	return amount
+}
+
 func Blockchain() *blockchain {
 	if b == nil {
 		once.Do(func() {
@@ -86,7 +117,7 @@ func Blockchain() *blockchain {
 			}
 			checkpoint := db.GetCheckPointFromDb()
 			if checkpoint == nil {
-				b.AddBlock("Genesis")
+				b.AddBlock()
 			} else {
 				b.restore(checkpoint)
 			}

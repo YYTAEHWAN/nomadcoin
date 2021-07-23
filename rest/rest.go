@@ -31,6 +31,11 @@ type AddBlockBody struct {
 	Message string
 }
 
+type totalBalanceResponse struct {
+	Address string `json:"address"`
+	Balance int    `json:"balance"`
+}
+
 type errorResponse struct {
 	ErrorMessage string `json:"errorMessage"`
 }
@@ -41,9 +46,7 @@ func blocks(rw http.ResponseWriter, r *http.Request) {
 		// rw.Header().Add("Content-Type", "application/json")
 		json.NewEncoder(rw).Encode(blockchain.Blockchain().BlocksSlice())
 	case "POST":
-		var addBlockBody AddBlockBody
-		utils.HandleErr(json.NewDecoder(r.Body).Decode(&addBlockBody))
-		blockchain.Blockchain().AddBlock(addBlockBody.Message)
+		blockchain.Blockchain().AddBlock()
 		rw.WriteHeader(http.StatusCreated)
 	}
 }
@@ -71,6 +74,11 @@ func documentation(rw http.ResponseWriter, r *http.Request) {
 			Description: "See A Block",
 			Payload:     "data:string",
 		},
+		{
+			URL:         url("/blocks/{address}"),
+			Method:      "GET",
+			Description: "Amount balance for a address",
+		},
 	}
 	rw.Header().Add("Content-Type", "application/json")
 	json.NewEncoder(rw).Encode(data)
@@ -93,6 +101,20 @@ func status(rw http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(rw).Encode(blockchain.Blockchain())
 }
 
+func balance(rw http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	address := vars["address"]
+	total := r.URL.Query().Get("total")
+	switch total {
+	case "true":
+		amount := blockchain.Blockchain().TotalBalanceByAddress(address)
+		json.NewEncoder(rw).Encode(totalBalanceResponse{address, amount})
+	default:
+		utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Blockchain().TxOutsByAddress(address)))
+	}
+
+}
+
 func jsonContentTypeMiddleWare(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Add("Content-Type", "application/json")
@@ -107,6 +129,7 @@ func Start(aPort int) {
 	router.HandleFunc("/status", status)
 	router.HandleFunc("/blocks", blocks).Methods("GET", "POST")
 	router.HandleFunc("/blocks/{hash:[a-f0-9]+}", block).Methods("GET")
+	router.HandleFunc("/blocks/{address}", balance)
 	fmt.Printf("Listening on http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, router))
 }
