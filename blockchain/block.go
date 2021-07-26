@@ -16,7 +16,7 @@ type Block struct {
 	Difficulty   int    `json:"difficulty"`
 	Nonce        int    `json:"nonce"` // 한 번만 사용되는 숫자
 	Timestamp    int    `json:"timestamp"`
-	Transactions []*Tx  `json:"transactions`
+	Transactions []*Tx  `json:"transactions"`
 }
 
 func (b *Block) persist() {
@@ -60,14 +60,15 @@ func (b *Block) mine() {
 
 func createBlock(prevHash string, height int) *Block {
 	block := &Block{
-		Hash:         "",
-		PrevHash:     prevHash,
-		Height:       height,
-		Difficulty:   Blockchain().difficulty(),
-		Nonce:        0,
-		Transactions: []*Tx{makeCoinbaseTx("taehwan")},
+		Hash:       "",
+		PrevHash:   prevHash,
+		Height:     height,
+		Difficulty: Blockchain().difficulty(),
+		Nonce:      0,
+		// Transactions: []*Tx{makeCoinbaseTx("taehwan")},
 	}
 	block.mine()
+	block.Transactions = Mempool.TxToComfirm()
 	block.persist()
 	return block
 	// dho dksehlfRKdy rltgjqmTL??ggg djfuqspdy~
