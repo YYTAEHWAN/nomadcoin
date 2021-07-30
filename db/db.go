@@ -12,8 +12,7 @@ const (
 	dbName      = "blockchain.db"
 	dataBucket  = "data"
 	blockBucket = "blocks"
-
-	checkpoint = "checkpoint"
+	checkpoint  = "checkpoint"
 )
 
 func DB() *bolt.DB {

@@ -49,7 +49,7 @@ func blocks(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		// rw.Header().Add("Content-Type", "application/json")
-		json.NewEncoder(rw).Encode(blockchain.Blockchain().BlocksSlice())
+		json.NewEncoder(rw).Encode(blockchain.BlocksSlice(blockchain.Blockchain()))
 	case "POST":
 		blockchain.Blockchain().AddBlock()
 		rw.WriteHeader(http.StatusCreated)
@@ -112,10 +112,10 @@ func balance(rw http.ResponseWriter, r *http.Request) {
 	total := r.URL.Query().Get("total")
 	switch total {
 	case "true":
-		amount := blockchain.Blockchain().TotalBalanceByAddress(address)
+		amount := blockchain.TotalBalanceByAddress(address, blockchain.Blockchain())
 		json.NewEncoder(rw).Encode(totalBalanceResponse{address, amount})
 	default:
-		utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Blockchain().TxOutsByAddress(address)))
+		utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.UTxOutsByAddress(address, blockchain.Blockchain())))
 	}
 
 }
