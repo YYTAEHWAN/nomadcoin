@@ -2,51 +2,115 @@ package wallet
 
 import (
 	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"learngo/github.com/nomadcoders/utils"
 	"math/big"
+	"os"
 )
 
 const (
-	signature     string = "4f7f14ef3526228ea9fa7d6c2d9e6cbd587e37bd29fd2f86afa2a64dd788705a6e60785a358e61f869b5550726fe2c4917004e055ced4d700e5267b19d25804e"
-	privateKey    string = "307702010104204e0a38a4d6104099c7c3e109b7c6c6758564cd613e00159544da5c78964d36a2a00a06082a8648ce3d030107a1440342000426377d2c4f912474e56ea1e467a9d2de9e0854fbb8d97386757716f463999322c36d28f9782bd052f21c7bf8391139562322e9e42c9f415e284cdb46d03c54ee"
-	hashedMessage string = "1c5863cd55b5a4413fd59f054af57ba3c75c0698b3851d70f99b8de2d5c7338f"
-	// 실제로는 Tx가 hash된 메세지일거야
-	pri string = "100371616754094915234634347704562684656090136652171610345641000101660048327935"
+	fileName string = "nomadcoin.wallet"
 )
 
-func Start() {
-	privBites, err := hex.DecodeString(privateKey)
-	//hex.DecodeString는 16진수 string을 받아서 []byte형태로 바꿔준다
-	// 그러므로 해당 데이터의 포맷이 16진수 string인지도 판별할 수 있다
+type wallet struct {
+	privateKey *ecdsa.PrivateKey
+	Address    string
+}
+
+var w *wallet
+
+func hasWalletFile() bool {
+	_, err := os.Stat("nomadcoin.wallet")
+	return !os.IsNotExist(err)
+}
+
+func createKey() *ecdsa.PrivateKey {
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	utils.HandleErr(err)
+	return privKey
+}
+
+func persistKey(key *ecdsa.PrivateKey) {
+	bytes, err := x509.MarshalECPrivateKey(key) // key의 parsing 과 marshaling을 책임지는 x509를 사용
+	//privateKey를 []byte로 만들어주고
+	utils.HandleErr(err)
+	err = os.WriteFile(fileName, bytes, 0644) // 이 함수는 파일을 열어주고, 데이터를 써주고, 파일을 자동으로 닫아준다 0644는 umask 번호
 	utils.HandleErr(err)
 
-	restoreKey, err := x509.ParseECPrivateKey(privBites)
+}
+
+func restoreKey() (key *ecdsa.PrivateKey) { // naked return 을 보여주기 위해 일부러 사용해봄
+	keyAsBytes, err := os.ReadFile(fileName)
+	utils.HandleErr(err)
+	key, err = x509.ParseECPrivateKey(keyAsBytes)
 	utils.HandleErr(err)
 
-	//fmt.Println(restoreKey)
-	//fmt.Printf("\n\n")
+	return
+}
 
-	sigBytes, err := hex.DecodeString(signature)
+func encodeBigInts(a, b []byte) string {
+	slice := append(a, b...)
+	return fmt.Sprintf("%x", slice)
+}
+
+func aFromK(key *ecdsa.PrivateKey) string {
+	return encodeBigInts(key.X.Bytes(), key.Y.Bytes())
+}
+
+func Sign(payload string, w wallet) string { // 여기서 w wallet을 포인터로 줄 필요는 없음 복사해서 값만 넣으면 되기 때문
+	payloadAsB, err := hex.DecodeString(payload) // 또한 이 과정을 안거치고 바로 []byte()함수를 이용해 바꿔줄 수 도 있지만
+	utils.HandleErr(err)                         // 16진수인 string인지를 확인하여 정확성을 더하기 위해선 hex.DecodeString()함수를 쓰는게 맞음
+	r, s, err := ecdsa.Sign(rand.Reader, w.privateKey, payloadAsB)
 	utils.HandleErr(err)
+	return encodeBigInts(r.Bytes(), s.Bytes())
+}
 
-	rBytes := sigBytes[:len(sigBytes)/2] //처음부터 반까지
-	sBytes := sigBytes[len(sigBytes)/2:] //반부터 끝까지
-
-	var bigS, bigR = big.Int{}, big.Int{} //이 문장은 왜 이렇게 되는지 잘 모르겠다 big.Int라는 타입이 어디 패키지에 있겠찌 math/big 이네 그리고 := 를 안써주고 = 를 써준 이유는 var 를 썼기 때문
-	// 밑에 SetByte() 초기화 함수를 쓰려면 변수가 초기화가 되어있어야 하나봐
-	bigR.SetBytes(rBytes) // 리시버 함수이기 때문에 값을 바꿔줄 수 있으므로 대입 필요 없음
-	bigS.SetBytes(sBytes)
-
-	//fmt.Println(bigR, bigS)
-
-	hashAsBytes, err := hex.DecodeString(hashedMessage)
+func restoreBigInts(payload string) (*big.Int, *big.Int) { // 컴퓨팅에 있어서 페이로드는 전송되는 데이터를 뜻한다
+	Bytes, err := hex.DecodeString(payload)
 	utils.HandleErr(err)
+	firstB := Bytes[:len(Bytes)/2]
+	secondB := Bytes[len(Bytes)/2:]
+	bigA, bigB := big.Int{}, big.Int{}
+	bigA.SetBytes(firstB)
+	bigB.SetBytes(secondB)
 
-	ok := ecdsa.Verify(&restoreKey.PublicKey, hashAsBytes, &bigR, &bigS)
+	return &bigA, &bigB
+}
 
-	fmt.Println(ok)
+func Verify(signature string, payload string, address string) bool {
+	r, s := restoreBigInts(signature)
+	x, y := restoreBigInts(address)
+	PublicKey := ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     x,
+		Y:     y,
+	}
+	payloadAsB, err := hex.DecodeString(payload)
+	utils.HandleErr(err)
+	ok := ecdsa.Verify(&PublicKey, payloadAsB, r, s)
 
+	return ok
+}
+
+func Wallet() *wallet {
+	if w == nil {
+		// has a wallet?
+		w = &wallet{}
+		if hasWalletFile() {
+			w.privateKey = restoreKey()
+			// yes -> restore the wallet
+		} else {
+			key := createKey()
+			persistKey(key)    // 키를 DB에 저장
+			w.privateKey = key // privateKey를 w에 저장
+			// no -> create the wallet
+		}
+		w.Address = aFromK(w.privateKey)
+	}
+	fmt.Println(w.Address)
+	return w
 }
