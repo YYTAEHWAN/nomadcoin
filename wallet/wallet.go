@@ -111,6 +111,6 @@ func Wallet() *wallet {
 		}
 		w.Address = aFromK(w.privateKey)
 	}
-	fmt.Println(w.Address)
+	//fmt.Println(w.Address)
 	return w
 }

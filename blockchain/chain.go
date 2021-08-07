@@ -83,22 +83,44 @@ func getdifficulty(b *blockchain) int {
 	}
 }
 
+func Txs(b *blockchain) []*Tx {
+	var txs []*Tx
+	for _, block := range BlocksSlice(b) {
+		txs = append(txs, block.Transactions...)
+	}
+	return txs
+}
+
+func FindTx(b *blockchain, txID string) *Tx {
+	for _, tx := range Txs(b) {
+		if tx.ID == txID {
+			return tx
+		}
+	}
+	return nil
+}
+
 func UTxOutsByAddress(address string, b *blockchain) []*UTxOut { // 함수를 public으로 export 되게 해놓은 이유는 이 함수를 API에서 불러올 것이기 때문이다
 	var uTxOuts []*UTxOut
 	sTxOuts := make(map[string]bool)
+
 	for _, block := range BlocksSlice(b) {
 		for _, tx := range block.Transactions {
 			for _, input := range tx.TxIns {
-				if input.Owner == address {
+				if input.Signature == "COINBASE" { // 이게 맞나?
+					break
+				}
+				if FindTx(Blockchain(), input.TxID).TxOuts[input.Index].Address == address {
+					// input으로 해당 output을 알 수 있으니 이렇게 진행하면 된다 input으로 진행시켜~
 					sTxOuts[input.TxID] = true
 				}
 			}
 
 			for index, output := range tx.TxOuts {
 				// 이걸 빠뜨림 소유자랑 넣은 주소랑 같으면 // 그래서 jiwon에도 똑같이 output이 생성되어 있었나보다
-				if output.Owner == address {
-					if _, ok := sTxOuts[tx.Id]; !ok {
-						uTxOut := &UTxOut{tx.Id, index, output.Amount}
+				if output.Address == address {
+					if _, ok := sTxOuts[tx.ID]; !ok {
+						uTxOut := &UTxOut{tx.ID, index, output.Amount}
 						if !IsOnMempool(uTxOut) {
 							uTxOuts = append(uTxOuts, uTxOut)
 						}

@@ -3,6 +3,7 @@ package blockchain
 import (
 	"errors"
 	"learngo/github.com/nomadcoders/utils"
+	"learngo/github.com/nomadcoders/wallet"
 	"time"
 )
 
@@ -17,31 +18,56 @@ type mempool struct {
 var Mempool *mempool = &mempool{}
 
 type Tx struct { // Tx = transaction
-	Id        string   `json:"id"` // tx의 해시값?
+	ID        string   `json:"id"` // tx의 해시값?
 	Timestamp int      `json:"timestamp"`
 	TxIns     []*TxIn  `json:"txIns"`
 	TxOuts    []*TxOut `json:"txOuts"`
 }
 
-func (t *Tx) getId() {
-	t.Id = utils.Hash(t)
-}
-
 type TxIn struct { // TxIn = transaction Input
-	TxID  string
-	Index int
-	Owner string `json:"owner"`
+	TxID      string `json:"txID"`
+	Index     int    `json:"index"`
+	Signature string `json:"signature"`
 }
 
 type TxOut struct { // TxOut = transaction Output2
-	Owner  string `json:"owner"`
-	Amount int    `json:"amount"`
+	Address string `json:"address"`
+	Amount  int    `json:"amount"`
 }
 
-type UTxOut struct {
+type UTxOut struct { //TxID의 TxOuts 중 Index번째 TxOut을 뜻함, 게다가 사용되지 않은 TxOut임
 	TxID   string
 	Index  int
 	Amount int
+}
+
+func (t *Tx) getId() {
+	t.ID = utils.Hash(t)
+}
+
+func (t *Tx) sign() {
+	for _, txIn := range t.TxIns {
+		txIn.Signature = wallet.Sign(t.ID, *wallet.Wallet())
+		// 만드려는 블록에 담긴 모든 txIn에 싸인을 한다
+	}
+}
+
+func vaildate(tx *Tx) bool {
+	vaild := true
+	for _, txIn := range tx.TxIns {
+		prevTx := FindTx(Blockchain(), txIn.TxID)
+		if prevTx == nil {
+			vaild = false
+			break
+		}
+		address := prevTx.TxOuts[txIn.Index].Address
+		vaild = wallet.Verify(txIn.Signature, tx.ID, address)
+		// 여기서 Verify()에 넣는 ID는 txIn.TxID == prevTx.ID  이 2가지는 모두 같은 ID임 ////// tx.ID 이거는 다를껄?
+		if !vaild { //vaild == false 보다 더 나은 방식
+			break
+		}
+	}
+	return vaild
 }
 
 func makeCoinbaseTx(address string) *Tx {
@@ -53,7 +79,7 @@ func makeCoinbaseTx(address string) *Tx {
 		{address, minerReward},
 	}
 	tx := Tx{
-		Id:        "",
+		ID:        "",
 		Timestamp: int(time.Now().Unix()),
 		TxIns:     txIns,
 		TxOuts:    txOuts,
@@ -62,42 +88,51 @@ func makeCoinbaseTx(address string) *Tx {
 	return &tx
 }
 
-func makeTx(from string, to string, amount int) (*Tx, error) {
-	if TotalBalanceByAddress(from, Blockchain()) < amount {
-		return nil, errors.New("not enought 돈")
+var ErrorNoMoney = errors.New("not enought 돈")
+var ErrorNotVaild = errors.New("transaction not vaild")
+
+func makeTx(address string, to string, amount int) (*Tx, error) {
+	if TotalBalanceByAddress(address, Blockchain()) < amount {
+		return nil, ErrorNoMoney
 	}
 
 	var TxIns []*TxIn
 	var TxOuts []*TxOut
-	uTxOuts := UTxOutsByAddress(from, Blockchain())
+	uTxOuts := UTxOutsByAddress(address, Blockchain())
 	total := 0
 
 	for _, uTxOut := range uTxOuts { // 사용될 TxOut들을 TxIn으로 옮기는 과정  //// 근데 이거  복사야 아니면 참조에 의한 변경이야?
 		if total >= amount {
 			break
 		}
-		txIn := &TxIn{uTxOut.TxID, uTxOut.Index, from} // 이 from은 하드코딩이므로 나중에 바꿔버릴꺼야~
-		TxIns = append(TxIns, txIn)                    // 의문 첫번째 - 위엣줄 코딩을 하게 되면 저 기록들이 옮겨져? 아니면 복사만 되어서 들어가는거야?
+		txIn := &TxIn{uTxOut.TxID, uTxOut.Index, address} // 이 address은 하드코딩이므로 나중에 바꿔버릴꺼야~
+		TxIns = append(TxIns, txIn)                       // 의문 첫번째 - 위엣줄 코딩을 하게 되면 저 기록들이 옮겨져? 아니면 복사만 되어서 들어가는거야?
 		total += uTxOut.Amount
 	}
 	if change := total - amount; change > 0 { // 거스름돈 받는 코드
-		changeTxOut := &TxOut{from, change}
+		changeTxOut := &TxOut{address, change}
 		TxOuts = append(TxOuts, changeTxOut)
 	}
 	TotxOut := &TxOut{to, amount}
 	TxOuts = append(TxOuts, TotxOut)
 	tx := &Tx{
-		Id:        "",
+		ID:        "",
 		Timestamp: int(time.Now().Unix()),
 		TxIns:     TxIns,
 		TxOuts:    TxOuts,
+	}
+	tx.getId()
+	tx.sign()
+	vaild := vaildate(tx)
+	if !vaild {
+		return nil, ErrorNotVaild
 	}
 	return tx, nil
 }
 
 func (m *mempool) AddTx(to string, amount int) error {
 	//transaction을 mempool에 추가해줄 뿐, 거래를 만들진 않는다
-	tx, err := makeTx("taehwan", to, amount)
+	tx, err := makeTx(wallet.Wallet().Address, to, amount)
 	if err != nil {
 		return err
 	}
@@ -106,7 +141,7 @@ func (m *mempool) AddTx(to string, amount int) error {
 }
 
 func (m *mempool) TxToComfirm() []*Tx {
-	coinBase := makeCoinbaseTx("taehwan")
+	coinBase := makeCoinbaseTx(wallet.Wallet().Address)
 	txs := m.Txs
 	txs = append(txs, coinBase)
 	m.Txs = nil // 밈풀 초기화

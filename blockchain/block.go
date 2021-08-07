@@ -43,13 +43,13 @@ func FindBlock(hash string) (*Block, error) {
 
 func (b *Block) mine() {
 	defer fmt.Println("채굴 완료!")
-	target := strings.Repeat("0", b.Difficulty)
 
+	target := strings.Repeat("0", b.Difficulty)
 	for {
 		b.Timestamp = int(time.Now().Unix())
 		hash := utils.Hash(b)
-		fmt.Printf("\nHash:%s\nTarget:%s\nNonce:%d\n\n", hash, target, b.Nonce)
-		if strings.HasPrefix(hash, target) {
+		//fmt.Printf("\nHash:%s\nTarget:%s\nNonce:%d\n\n", hash, target, b.Nonce)
+		if strings.HasPrefix(hash, target) { // hash값과 target값이 같다면
 			b.Hash = hash
 			break
 		} else {
@@ -67,7 +67,7 @@ func createBlock(prevHash string, height, diff int) *Block {
 		Nonce:      0,
 		// Transactions: []*Tx{makeCoinbaseTx("taehwan")},
 	}
-	block.mine()
+	block.mine() // 조건에 맞는 해쉬값을 찾고,, 찾으면 그 값을 블록의 hash값으로 설정
 	block.Transactions = Mempool.TxToComfirm()
 	block.persist()
 	return block

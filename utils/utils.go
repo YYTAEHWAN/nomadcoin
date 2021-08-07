@@ -28,7 +28,7 @@ func FromBytes(i interface{}, data []byte) { // 인자는 포인터와 복원할
 	// 이렇게 간단하게 코드가 마무리 되었다
 }
 
-func Hash(i interface{}) string {
+func Hash(i interface{}) string { // 인터페이스라는 것은 모든 형태의 변수를 뜻함
 	s := fmt.Sprintf("%v", i)
 	hash := sha256.Sum256([]byte(s))
 	return fmt.Sprintf("%x", hash)

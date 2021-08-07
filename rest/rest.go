@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"learngo/github.com/nomadcoders/blockchain"
 	"learngo/github.com/nomadcoders/utils"
+	"learngo/github.com/nomadcoders/wallet"
 	"log"
 	"net/http"
 
@@ -39,6 +40,10 @@ type totalBalanceResponse struct {
 type addTxpayload struct {
 	To     string
 	Amount int
+}
+
+type MyWalletResponse struct {
+	Address string `json:"address"`
 }
 
 type errorResponse struct {
@@ -136,9 +141,17 @@ func transcations(rw http.ResponseWriter, r *http.Request) {
 	utils.HandleErr(json.NewDecoder(r.Body).Decode(&payload))
 	err := blockchain.Mempool.AddTx(payload.To, payload.Amount)
 	if err != nil {
-		json.NewEncoder(rw).Encode(errorResponse{"not enough money"})
+		rw.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(rw).Encode(errorResponse{err.Error()})
+		return
 	}
+	// NewEncoder이 실행되고 난 뒤에 WriteHeader이 또다시 실행되면 ㅠㅠㅠ 오류가 뜹니다
 	rw.WriteHeader(http.StatusCreated)
+}
+
+func mywallet(rw http.ResponseWriter, r *http.Request) {
+	address := wallet.Wallet().Address
+	json.NewEncoder(rw).Encode(MyWalletResponse{Address: address})
 }
 
 func Start(aPort int) {
@@ -149,8 +162,9 @@ func Start(aPort int) {
 	router.HandleFunc("/status", status)
 	router.HandleFunc("/blocks", blocks).Methods("GET", "POST")
 	router.HandleFunc("/blocks/{hash:[a-f0-9]+}", block).Methods("GET")
-	router.HandleFunc("/balance/{address}", balance)
-	router.HandleFunc("/mempool", mempool)
+	router.HandleFunc("/balance/{address}", balance).Methods("GET")
+	router.HandleFunc("/mempool", mempool).Methods("GET")
+	router.HandleFunc("/wallet", mywallet).Methods("GET")
 	router.HandleFunc("/transcations", transcations)
 	fmt.Printf("Listening on http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, router))
