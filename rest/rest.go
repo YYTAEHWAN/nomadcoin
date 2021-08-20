@@ -51,13 +51,19 @@ type errorResponse struct {
 	ErrorMessage string `json:"errorMessage"`
 }
 
+type AddpeerPayload struct {
+	Address string
+	Port    string
+}
+
 func blocks(rw http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		// rw.Header().Add("Content-Type", "application/json")
 		json.NewEncoder(rw).Encode(blockchain.BlocksSlice(blockchain.Blockchain()))
 	case "POST":
-		blockchain.Blockchain().AddBlock()
+		newBlock := blockchain.Blockchain().AddBlock()
+		p2p.BroadcastNewBlock(newBlock)
 		rw.WriteHeader(http.StatusCreated)
 	}
 }
@@ -114,7 +120,7 @@ func block(rw http.ResponseWriter, r *http.Request) {
 }
 
 func status(rw http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(rw).Encode(blockchain.Blockchain())
+	blockchain.Status(blockchain.Blockchain(), rw)
 }
 
 func balance(rw http.ResponseWriter, r *http.Request) {
@@ -141,24 +147,27 @@ func jsonContentTypeMiddleWare(next http.Handler) http.Handler {
 func loggerMiddleWare(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		fmt.Println(r.URL)
-		fmt.Println("왜 안되지,.....ㅠㅠㅠ")
 		next.ServeHTTP(rw, r)
 	})
 }
 
 func mempool(rw http.ResponseWriter, r *http.Request) {
-	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Mempool.Txs))
+	//blockchain.Txstatus(blockchain.Mempool(), rw)
+	utils.HandleErr(json.NewEncoder(rw).Encode(blockchain.Mempool().Txs))
 }
 
-func transcations(rw http.ResponseWriter, r *http.Request) {
+func transactions(rw http.ResponseWriter, r *http.Request) {
 	var payload addTxpayload
 	utils.HandleErr(json.NewDecoder(r.Body).Decode(&payload))
-	err := blockchain.Mempool.AddTx(payload.To, payload.Amount)
+	tx, err := blockchain.Mempool().AddTx(payload.To, payload.Amount)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(rw).Encode(errorResponse{err.Error()})
 		return
 	}
+	// 만들어진 Tx를 다른 노드들에게도 전달
+	// 이 코드는 REST API?로 만든 Tx를 다른 노드들에게 보내는 Tx만든 노드 시점이야
+	p2p.BroadcastNewTx(tx)
 	// NewEncoder이 실행되고 난 뒤에 WriteHeader이 또다시 실행되면 ㅠㅠㅠ 오류가 뜹니다
 	rw.WriteHeader(http.StatusCreated)
 }
@@ -166,6 +175,19 @@ func transcations(rw http.ResponseWriter, r *http.Request) {
 func mywallet(rw http.ResponseWriter, r *http.Request) {
 	address := wallet.Wallet().Address
 	json.NewEncoder(rw).Encode(MyWalletResponse{Address: address})
+}
+
+func getPeerServer(rw http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		var APayload *AddpeerPayload
+		utils.HandleErr(json.NewDecoder(r.Body).Decode(&APayload))
+		fmt.Printf("REST API로 받은 데이터는 %s , %s\n", APayload.Address, APayload.Port)
+		p2p.AddPeers(APayload.Address, APayload.Port, port, false) // 여기서 port는 지금 열려있는 Openport 번호, Apayload는 보내온 Address and Port
+		rw.WriteHeader(http.StatusOK)
+	case "GET":
+		json.NewEncoder(rw).Encode(p2p.AllPeers(&p2p.Peers))
+	}
 }
 
 func Start(aPort int) {
@@ -179,8 +201,9 @@ func Start(aPort int) {
 	router.HandleFunc("/balance/{address}", balance).Methods("GET")
 	router.HandleFunc("/mempool", mempool).Methods("GET")
 	router.HandleFunc("/wallet", mywallet).Methods("GET")
-	router.HandleFunc("/transcations", transcations).Methods("GET")
+	router.HandleFunc("/transactions", transactions).Methods("POST")
 	router.HandleFunc("/ws", p2p.Upgrade).Methods("GET")
+	router.HandleFunc("/peers", getPeerServer).Methods("GET", "POST")
 	fmt.Printf("Listening on http://localhost%s\n", port)
 	log.Fatal(http.ListenAndServe(port, router))
 }

@@ -1,8 +1,10 @@
 package blockchain
 
 import (
+	"encoding/json"
 	"learngo/github.com/nomadcoders/db"
 	"learngo/github.com/nomadcoders/utils"
+	"net/http"
 	"sync"
 )
 
@@ -17,6 +19,7 @@ type blockchain struct {
 	NewstHash         string `json:"newestHash"`
 	Height            int    `json:"height"`
 	CurrentDifficulty int    `json:"currentDifficulty"`
+	m                 sync.Mutex
 }
 
 var b *blockchain // 이건 blockchain package 안에서만 사용할 수 있음!
@@ -26,12 +29,13 @@ func (b *blockchain) restore(data []byte) {
 	utils.FromBytes(b, data)
 }
 
-func (b *blockchain) AddBlock() {
+func (b *blockchain) AddBlock() *Block {
 	block := createBlock(b.NewstHash, b.Height+1, getdifficulty(b))
 	b.NewstHash = block.Hash
 	b.Height = block.Height
 	b.CurrentDifficulty = block.Difficulty
 	persistBlockchain(b)
+	return block
 }
 
 func persistBlockchain(b *blockchain) {
@@ -39,7 +43,15 @@ func persistBlockchain(b *blockchain) {
 	// 블록체인 구조체를 바이트로 변환한 슬라이스 []byte를 인수로 넘겨준다
 }
 
+func Status(b *blockchain, rw http.ResponseWriter) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	json.NewEncoder(rw).Encode(b)
+}
+
 func BlocksSlice(b *blockchain) []*Block {
+	b.m.Lock()
+	defer b.m.Unlock()
 	var Blocks []*Block
 	hashCursor := b.NewstHash
 	for {
@@ -154,4 +166,44 @@ func Blockchain() *blockchain {
 		}
 	})
 	return b
+}
+
+func (b *blockchain) Replace(newBlocks []*Block) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	b.CurrentDifficulty = newBlocks[0].Difficulty
+	b.Height = newBlocks[0].Height
+	b.NewstHash = newBlocks[0].Hash
+	// 블록체인 마지막 블록 저장
+	persistBlockchain(b)
+
+	// 기존 DB 삭제 후 newBlocks 저장
+	db.EmptyBlocks()
+	for _, block := range newBlocks {
+		persistBlock(block)
+	}
+}
+
+func (b *blockchain) AddPeerBlock(newBlock *Block) {
+	b.m.Lock()
+	m.m.Lock()
+	defer b.m.Unlock()
+	defer m.m.Unlock()
+
+	b.CurrentDifficulty = newBlock.Difficulty
+	b.Height = newBlock.Height // or b.Height += 1
+	b.NewstHash = newBlock.Hash
+
+	// 블록체인 마지막 블록 저장
+	persistBlockchain(b)
+	// 새로운 블록 저장
+	persistBlock(newBlock)
+
+	for _, tx := range newBlock.Transactions {
+		_, ok := m.Txs[tx.ID] // 현재 mempool에 있는 Txs 중 새로운 블록에 들어있는 Tx가 있느냐
+		if ok {               // 있다면 삭제하여라
+			delete(m.Txs, tx.ID)
+		}
+	}
+	//mempool 문제는 나중에 transaction 때 해결할 것입니다~
 }

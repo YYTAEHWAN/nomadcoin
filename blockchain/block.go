@@ -19,7 +19,7 @@ type Block struct {
 	Transactions []*Tx  `json:"transactions"`
 }
 
-func (b *Block) persist() {
+func persistBlock(b *Block) {
 	db.SaveBlock(b.Hash, utils.ToBytes(b))
 	// 16진수로 된 해쉬 string이랑, b블록을 []byte로 변환한 값을 넣어준다
 }
@@ -68,8 +68,8 @@ func createBlock(prevHash string, height, diff int) *Block {
 		// Transactions: []*Tx{makeCoinbaseTx("taehwan")},
 	}
 	block.mine() // 조건에 맞는 해쉬값을 찾고,, 찾으면 그 값을 블록의 hash값으로 설정
-	block.Transactions = Mempool.TxToComfirm()
-	block.persist()
+	block.Transactions = Mempool().TxToComfirm()
+	persistBlock(block)
 	return block
 	// dho dksehlfRKdy rltgjqmTL??ggg djfuqspdy~
 }

@@ -1,23 +1,30 @@
 package db
 
 import (
+	"fmt"
 	"learngo/github.com/nomadcoders/utils"
+	"os"
 
-	"github.com/boltdb/bolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 var db *bolt.DB
 
 const (
-	dbName      = "blockchain.db"
+	dbName      = "blockchain"
 	dataBucket  = "data"
 	blockBucket = "blocks"
 	checkpoint  = "checkpoint"
 )
 
+func getDbName() string {
+	port := os.Args[2][7:]
+	return fmt.Sprintf("%s_%s.db", dbName, port)
+}
+
 func DB() *bolt.DB {
 	if db == nil {
-		dbPointer, err := bolt.Open(dbName, 0600, nil)
+		dbPointer, err := bolt.Open(getDbName(), 0600, nil)
 		db = dbPointer
 		utils.HandleErr(err)
 		err = db.Update(func(t *bolt.Tx) error {
@@ -69,4 +76,13 @@ func GetBlockHashFromDb(hash string) []byte {
 		return nil
 	})
 	return data
+}
+
+func EmptyBlocks() {
+	DB().Update(func(t *bolt.Tx) error {
+		utils.HandleErr(t.DeleteBucket([]byte(blockBucket)))
+		_, err := t.CreateBucket([]byte(blockBucket))
+		utils.HandleErr(err)
+		return nil
+	})
 }

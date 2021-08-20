@@ -1,9 +1,12 @@
 package blockchain
 
 import (
+	"encoding/json"
 	"errors"
 	"learngo/github.com/nomadcoders/utils"
 	"learngo/github.com/nomadcoders/wallet"
+	"net/http"
+	"sync"
 	"time"
 )
 
@@ -12,10 +15,21 @@ const (
 )
 
 type mempool struct {
-	Txs []*Tx
+	Txs map[string]*Tx
+	m   sync.Mutex
 }
 
-var Mempool *mempool = &mempool{}
+var m *mempool
+var memOnce sync.Once
+
+func Mempool() *mempool {
+	memOnce.Do(func() {
+		m = &mempool{
+			Txs: make(map[string]*Tx),
+		}
+	})
+	return m
+}
 
 type Tx struct { // Tx = transaction
 	ID        string   `json:"id"` // tx의 해시값?
@@ -130,28 +144,31 @@ func makeTx(address string, to string, amount int) (*Tx, error) {
 	return tx, nil
 }
 
-func (m *mempool) AddTx(to string, amount int) error {
+func (m *mempool) AddTx(to string, amount int) (*Tx, error) {
 	//transaction을 mempool에 추가해줄 뿐, 거래를 만들진 않는다
 	tx, err := makeTx(wallet.Wallet().Address, to, amount)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	m.Txs = append(m.Txs, tx)
-	return nil
+	m.Txs[tx.ID] = tx
+	return tx, nil
 }
 
 func (m *mempool) TxToComfirm() []*Tx {
 	coinBase := makeCoinbaseTx(wallet.Wallet().Address)
-	txs := m.Txs
+	var txs []*Tx
+	for _, tx := range m.Txs {
+		txs = append(txs, tx)
+	}
 	txs = append(txs, coinBase)
-	m.Txs = nil // 밈풀 초기화
+	m.Txs = make(map[string]*Tx) // 밈풀 초기화 ,, map은 nil로 초기화하면 삭제되므로 초기화된 맵을 만들어 넣어준다
 	return txs
 }
 
 func IsOnMempool(uTxOut *UTxOut) bool {
 	exists := false
 Outer:
-	for _, tx := range Mempool.Txs {
+	for _, tx := range Mempool().Txs {
 		for _, input := range tx.TxIns {
 			// mempool에 들어있는 inputs들은 모두 사용될 예정인 TxOut들이지 그러니 input과 같은 ID, Index가 있다면 삐삑 넌 걸렸어 UTxOuts로 다시 못들어가
 			if input.TxID == uTxOut.TxID && input.Index == uTxOut.Index {
@@ -161,4 +178,16 @@ Outer:
 		}
 	}
 	return exists
+}
+
+func (m *mempool) AddPeerTxOnMem(tx *Tx) {
+	m.m.Lock()
+	defer m.m.Unlock()
+	m.Txs[tx.ID] = tx
+}
+
+func Txstatus(mem *mempool, rw http.ResponseWriter) {
+	mem.m.Lock()
+	defer mem.m.Unlock()
+	utils.HandleErr(json.NewEncoder(rw).Encode(mem.Txs))
 }
