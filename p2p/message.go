@@ -3,8 +3,10 @@ package p2p
 import (
 	"encoding/json"
 	"fmt"
-	"learngo/github.com/nomadcoders/blockchain"
-	"learngo/github.com/nomadcoders/utils"
+	"strings"
+
+	"github.com/nomadcoders/blockchain"
+	"github.com/nomadcoders/utils"
 )
 
 type MessageKind int
@@ -88,7 +90,8 @@ func handleMsg(m *Message, p *peer) { // 이 함수는 포트 3000에 의해서 
 	case MessageNewPeerNotify:
 		var payload string
 		utils.HandleErr(json.Unmarshal(m.Payload, &payload))
-		fmt.Printf("i will upgrade now /ws %s\n", payload)
+		parts := strings.Split(payload, ":")
+		AddPeers(parts[0], parts[1], parts[2], false)
 	}
 }
 
@@ -102,7 +105,7 @@ func notifyNewTx(tx *blockchain.Tx, p *peer) {
 	p.inbox <- m
 }
 
-func notifyNewPeer(address string, p *peer) {
-	m := makeMessage(MessageNewPeerNotify, address)
+func notifyNewPeer(payload string, p *peer) {
+	m := makeMessage(MessageNewPeerNotify, payload)
 	p.inbox <- m
 }

@@ -26,7 +26,7 @@ POST http://localhost:3000/transactions
 }
 
 ###
-http://localhost:4000/mempool
+http://localhost:5000/mempool
 
 ###
 POST http://localhost:4000/peers
@@ -36,8 +36,20 @@ POST http://localhost:4000/peers
     "port" : "3000"
 }
 
+
+###
+POST http://localhost:3000/peers
+
+{
+    "address" : "127.0.0.1",
+    "port" : "5000"
+}
+
 ###
 http://localhost:4000/peers
 
 ###
 http://localhost:3000/peers
+
+###
+http://localhost:5000/peers

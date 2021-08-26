@@ -3,10 +3,11 @@ package cli
 import (
 	"flag"
 	"fmt"
-	explorer "learngo/github.com/nomadcoders/explorer/templates"
-	"learngo/github.com/nomadcoders/rest"
 	"os"
 	"runtime"
+
+	explorer "github.com/nomadcoders/explorer/templates"
+	"github.com/nomadcoders/rest"
 )
 
 func usage() {

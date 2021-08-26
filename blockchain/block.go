@@ -3,10 +3,10 @@ package blockchain
 import (
 	"errors"
 	"fmt"
-	"learngo/github.com/nomadcoders/db"
-	"learngo/github.com/nomadcoders/utils"
 	"strings"
 	"time"
+
+	"github.com/nomadcoders/utils"
 )
 
 type Block struct {
@@ -20,7 +20,7 @@ type Block struct {
 }
 
 func persistBlock(b *Block) {
-	db.SaveBlock(b.Hash, utils.ToBytes(b))
+	dbStorage.SaveBlock(b.Hash, utils.ToBytes(b))
 	// 16진수로 된 해쉬 string이랑, b블록을 []byte로 변환한 값을 넣어준다
 }
 
@@ -31,7 +31,7 @@ func (b *Block) restore(data []byte) {
 }
 
 func FindBlock(hash string) (*Block, error) {
-	blockBytes := db.GetBlockHashFromDb(hash)
+	blockBytes := dbStorage.GetBlockHashFromDb(hash)
 	if blockBytes == nil {
 		return nil, ErrNotFound
 	}

@@ -2,10 +2,11 @@ package blockchain
 
 import (
 	"encoding/json"
-	"learngo/github.com/nomadcoders/db"
-	"learngo/github.com/nomadcoders/utils"
 	"net/http"
 	"sync"
+
+	"github.com/nomadcoders/db"
+	"github.com/nomadcoders/utils"
 )
 
 const (
@@ -22,8 +23,17 @@ type blockchain struct {
 	m                 sync.Mutex
 }
 
+type storage interface {
+	GetBlockHashFromDb(hash string) []byte // nico's findBlock()
+	GetCheckPointFromDb() []byte           // nico's loadChain()
+	SaveBlock(hash string, data []byte)    // nico's saveBlock()
+	SaveCheckpoint(data []byte)            // nico's saveChain()
+	DeleteAllBlocks()
+}
+
 var b *blockchain // 이건 blockchain package 안에서만 사용할 수 있음!
 var once sync.Once
+var dbStorage storage = db.DB{}
 
 func (b *blockchain) restore(data []byte) {
 	utils.FromBytes(b, data)
@@ -39,7 +49,7 @@ func (b *blockchain) AddBlock() *Block {
 }
 
 func persistBlockchain(b *blockchain) {
-	db.SaveCheckpoint(utils.ToBytes(b))
+	dbStorage.SaveCheckpoint(utils.ToBytes(b))
 	// 블록체인 구조체를 바이트로 변환한 슬라이스 []byte를 인수로 넘겨준다
 }
 
@@ -57,9 +67,9 @@ func BlocksSlice(b *blockchain) []*Block {
 	for {
 		block, _ := FindBlock(hashCursor) // FindBlock이 *Block, err를 리턴하기 때문에
 		Blocks = append(Blocks, block)    // 가장 최근의 블록부터 넣기 때문에 Blocks의 첫 블록은 가장 최근의 블록임
-		if block.PrevHash != "" {
+		if block.PrevHash != "" {         // 이전 해시값이 있으면 즉 이전 블록이 있다면
 			hashCursor = block.PrevHash
-		} else {
+		} else { // 이전 블록이 없다면
 			break
 		}
 	}
@@ -158,7 +168,7 @@ func Blockchain() *blockchain {
 		b = &blockchain{
 			Height: 0,
 		}
-		checkpoint := db.GetCheckPointFromDb()
+		checkpoint := dbStorage.GetCheckPointFromDb()
 		if checkpoint == nil {
 			b.AddBlock()
 		} else {
@@ -178,7 +188,7 @@ func (b *blockchain) Replace(newBlocks []*Block) {
 	persistBlockchain(b)
 
 	// 기존 DB 삭제 후 newBlocks 저장
-	db.EmptyBlocks()
+	dbStorage.DeleteAllBlocks()
 	for _, block := range newBlocks {
 		persistBlock(block)
 	}

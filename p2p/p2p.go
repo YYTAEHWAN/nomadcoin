@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"learngo/github.com/nomadcoders/blockchain"
-	"learngo/github.com/nomadcoders/utils"
+	"github.com/nomadcoders/blockchain"
+	"github.com/nomadcoders/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -13,18 +13,18 @@ import (
 var upgrader = websocket.Upgrader{}
 
 func Upgrade(rw http.ResponseWriter, r *http.Request) {
-	ip := utils.Spliter(r.RemoteAddr, ":", 0)
+	ip := utils.Spliter(r.RemoteAddr, ":", 0) // 앞의 "127.0.0.1"만 가져오는 코드
 	openPort := r.URL.Query().Get("openPort")
 	upgrader.CheckOrigin = func(r *http.Request) bool {
 		return (ip != "" && openPort != "")
 	}
-	fmt.Printf("r.RemoteAddr : %s\n", r.RemoteAddr)
-	fmt.Printf("Upgrade에서 받은 ip : %s\n", ip)
+	//fmt.Printf("r.RemoteAddr : %s\n", r.RemoteAddr)
+	//fmt.Printf("Upgrade에서 받은 ip : %s\n", ip)
 	fmt.Printf("%s click button to connect with you and wants an upgrade\n", openPort)
 	conn, err := upgrader.Upgrade(rw, r, nil)
 	utils.HandleErr(err)
 	fmt.Printf("A : (upgrade 함수)\n")
-	initPeer(conn, ip, openPort[1:]) // 3000이 요청한 4000의 주소를 얻어서 서버 연결하고 peer페이지에 등록
+	initPeer(conn, ip, openPort) // 3000이 요청한 4000의 주소를 얻어서 서버 연결하고 peer페이지에 등록
 }
 
 func AddPeers(address string, port, openPort string, broadcast bool) {
@@ -33,8 +33,9 @@ func AddPeers(address string, port, openPort string, broadcast bool) {
 	conn, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf("ws://%s:%s/ws?openPort=%s", address, port, openPort), nil)
 	utils.HandleErr(err)
 	peer := initPeer(conn, address, port) // 연결되면 ,, 이 peer는 요청받은 데이터 peer 주소야
-	if !broadcast {                       // 처음이니? 그럼 친구들에게 알려주렴
+	if broadcast {                        // 처음이니? 그럼 친구들에게 알려주렴
 		BroadcastNewPeer(peer) // 새로운 Peer 다른 Peer들에게 소개시켜주고
+		return
 	}
 	sendNewestBlock(peer) // 새로운 Peer에겐 최신 블록을 보내본다
 }

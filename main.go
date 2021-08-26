@@ -1,11 +1,22 @@
 package main
 
 import (
-	"learngo/github.com/nomadcoders/cli"
-	"learngo/github.com/nomadcoders/db"
+	"github.com/nomadcoders/cli"
+	"github.com/nomadcoders/db"
 )
 
 func main() {
 	defer db.Close()
+	db.InitDB()
 	cli.Start()
 }
+
+/*
+package hello
+
+import "rsc.io/quote"
+
+func Hello() string {
+	return quote.Hello()
+}
+*/

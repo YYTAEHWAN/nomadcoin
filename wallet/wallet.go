@@ -7,14 +7,39 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
-	"learngo/github.com/nomadcoders/utils"
+	"io/fs"
 	"math/big"
 	"os"
+
+	"github.com/nomadcoders/utils"
 )
 
 const (
 	fileName string = "nomadcoin.wallet"
 )
+
+type filelayer interface {
+	hasWalletFile() bool
+	writeFile(name string, data []byte, perm fs.FileMode) error
+	readFile(name string) ([]byte, error)
+}
+
+type layer struct{}
+
+func (layer) hasWalletFile() bool {
+	_, err := os.Stat(fileName)
+	return !os.IsNotExist(err)
+}
+
+func (layer) writeFile(name string, data []byte, perm fs.FileMode) error {
+	return os.WriteFile(name, data, perm)
+}
+
+func (layer) readFile(name string) ([]byte, error) {
+	return os.ReadFile(name)
+}
+
+var files filelayer = layer{}
 
 type wallet struct {
 	privateKey *ecdsa.PrivateKey
@@ -22,11 +47,6 @@ type wallet struct {
 }
 
 var w *wallet
-
-func hasWalletFile() bool {
-	_, err := os.Stat("nomadcoin.wallet")
-	return !os.IsNotExist(err)
-}
 
 func createKey() *ecdsa.PrivateKey {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -38,13 +58,13 @@ func persistKey(key *ecdsa.PrivateKey) {
 	bytes, err := x509.MarshalECPrivateKey(key) // key의 parsing 과 marshaling을 책임지는 x509를 사용
 	//privateKey를 []byte로 만들어주고
 	utils.HandleErr(err)
-	err = os.WriteFile(fileName, bytes, 0644) // 이 함수는 파일을 열어주고, 데이터를 써주고, 파일을 자동으로 닫아준다 0644는 umask 번호
+	err = files.writeFile(fileName, bytes, 0644) // 이 함수는 파일을 열어주고, 데이터를 써주고, 파일을 자동으로 닫아준다 0644는 umask 번호
 	utils.HandleErr(err)
 
 }
 
 func restoreKey() (key *ecdsa.PrivateKey) { // naked return 을 보여주기 위해 일부러 사용해봄
-	keyAsBytes, err := os.ReadFile(fileName)
+	keyAsBytes, err := files.readFile(fileName)
 	utils.HandleErr(err)
 	key, err = x509.ParseECPrivateKey(keyAsBytes)
 	utils.HandleErr(err)
@@ -81,6 +101,8 @@ func restoreBigInts(payload string) (*big.Int, *big.Int) { // 컴퓨팅에 있�
 	return &bigA, &bigB
 }
 
+// Verify takes signature, payload(TxIn.ID), address and then returns boolean after verifying
+// verifying process is decoding the datas to int or []byte and then put these in ecdsa.Verify()
 func Verify(signature string, payload string, address string) bool {
 	r, s := restoreBigInts(signature)
 	x, y := restoreBigInts(address)
@@ -100,7 +122,7 @@ func Wallet() *wallet {
 	if w == nil {
 		// has a wallet?
 		w = &wallet{}
-		if hasWalletFile() {
+		if files.hasWalletFile() {
 			w.privateKey = restoreKey()
 			// yes -> restore the wallet
 		} else {

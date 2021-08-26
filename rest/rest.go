@@ -3,12 +3,13 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
-	"learngo/github.com/nomadcoders/blockchain"
-	"learngo/github.com/nomadcoders/p2p"
-	"learngo/github.com/nomadcoders/utils"
-	"learngo/github.com/nomadcoders/wallet"
 	"log"
 	"net/http"
+
+	"github.com/nomadcoders/blockchain"
+	"github.com/nomadcoders/p2p"
+	"github.com/nomadcoders/utils"
+	"github.com/nomadcoders/wallet"
 
 	"github.com/gorilla/mux"
 )
@@ -183,7 +184,7 @@ func getPeerServer(rw http.ResponseWriter, r *http.Request) {
 		var APayload *AddpeerPayload
 		utils.HandleErr(json.NewDecoder(r.Body).Decode(&APayload))
 		fmt.Printf("REST API로 받은 데이터는 %s , %s\n", APayload.Address, APayload.Port)
-		p2p.AddPeers(APayload.Address, APayload.Port, port, false) // 여기서 port는 지금 열려있는 Openport 번호, Apayload는 보내온 Address and Port
+		p2p.AddPeers(APayload.Address, APayload.Port, port[1:], true) // 여기서 port는 지금 열려있는 Openport 번호, Apayload는 보내온 Address and Port
 		rw.WriteHeader(http.StatusOK)
 	case "GET":
 		json.NewEncoder(rw).Encode(p2p.AllPeers(&p2p.Peers))
