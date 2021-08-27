@@ -11,7 +11,7 @@ Chapter3 에서는 golang에 대해서 배워보고
 
 Chapter4 에서는 블록체인 개념을 간단하게 구현해봅니다
 
-Chapter5 에서는 구현한 블록체인을 Server-Side-Rendering 방식으로 Explorer를 만들었고
+Chapter5 에서는 구현한 블록체인을 Server-Side-Rendering 방식으로 Explorer에 올려봤고
 
 Chapter6 에서는 REST API방식으로 상호작용하는 웹페이지를 만들었으며
 
